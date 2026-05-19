@@ -64,8 +64,13 @@
     "numPartitions": -1
   },
   "schema": {
-    "columns": [],
-    "userModified": true
+    "columns": [
+      {"name":"artist_name","type":"string","maxLength":16777216},
+      {"name":"tag_name","type":"string","maxLength":16777216},
+      {"name":"tag_count","type":"bigint"},
+      {"name":"ingested_at","type":"string","maxLength":16777216}
+    ],
+    "userModified": false
   },
   "typeSystemVersion": "V2",
   "dkuProperties": [],

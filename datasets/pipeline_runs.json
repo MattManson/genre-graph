@@ -44,7 +44,7 @@
     "partitioningType": "custom",
     "normalizeDoubles": true,
     "catalog": "MUSIC_GENRES",
-    "table": "pipeline_runs",
+    "table": "PIPELINE_RUNS",
     "schema": "RAW",
     "tableCreationMode": "auto",
     "writeInsertBatchSize": 10000,

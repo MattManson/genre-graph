@@ -44,7 +44,7 @@
     "partitioningType": "custom",
     "normalizeDoubles": true,
     "catalog": "MUSIC_GENRES",
-    "table": "ARTISTS_RAW",
+    "table": "artists_raw",
     "schema": "RAW",
     "tableCreationMode": "auto",
     "writeInsertBatchSize": 10000,

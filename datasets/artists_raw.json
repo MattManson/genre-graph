@@ -65,12 +65,18 @@
   },
   "schema": {
     "columns": [
-      {"name":"artist_name","type":"string","maxLength":16777216},
-      {"name":"tag_name","type":"string","maxLength":16777216},
-      {"name":"tag_count","type":"bigint"},
-      {"name":"ingested_at","type":"string","maxLength":16777216}
+      {"name":"run_id","type":"string","comment":"","maxLength":1000},
+      {"name":"run_ts","type":"date","comment":"","maxLength":1000},
+      {"name":"artist_name","type":"string","comment":"","maxLength":1000},
+      {"name":"mbid","type":"string","comment":"","maxLength":1000},
+      {"name":"listeners","type":"bigint","comment":"","maxLength":1000},
+      {"name":"playcount","type":"bigint","comment":"","maxLength":1000},
+      {"name":"tags","type":"string","comment":"","maxLength":1000},
+      {"name":"bio_summary","type":"string","comment":"","maxLength":1000},
+      {"name":"source","type":"string","comment":"","maxLength":1000},
+      {"name":"discovery_tag","type":"string","comment":"","maxLength":1000}
     ],
-    "userModified": false
+    "userModified": true
   },
   "typeSystemVersion": "V2",
   "dkuProperties": [],

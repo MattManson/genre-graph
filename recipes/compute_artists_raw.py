@@ -34,18 +34,19 @@ BASE_URL            = "https://ws.audioscrobbler.com/2.0/"
 RUN_ID              = str(uuid.uuid4())
 RUN_TS              = datetime.now(timezone.utc)
 
-# Time budget — stop new discovery after this many seconds (leaves ~10 min buffer)
-#RUN_TIME_LIMIT_S    = 100 * 60       # 100 minutes
+# ── Production config (uncomment to use) ──────────────────────────────────────
+# RUN_TIME_LIMIT_S    = 14400          # 4 hour hard stop
+# MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
+# MAX_TAGS            = 10_000         # max unique tags to track across the snowball
+# MIN_LISTENERS       = 100            # drop artists below this threshold
+# MIN_TAG_COUNT       = 3              # drop tags used fewer than N times on an artist
+# REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
+# LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
+# TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
+# TOP_TAGS_PAGES      = 5              # tag.getTopTags seed pages (50/page)
+# ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
 
-# New artist discovery controls
-#MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
-#MAX_TAGS            = 10_000         # max unique tags to track across the snowball
-#TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
-#TOP_TAGS_PAGES      = 5              # tag.getTopTags seed pages (50/page)
-#ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
-#MIN_LISTENERS       = 100            # drop artists below this threshold
-#MIN_TAG_COUNT       = 3              # drop tags used fewer than N times on an artist
-
+# ── Test config ───────────────────────────────────────────────────────────────
 RUN_TIME_LIMIT_S    = 300       # 5 minutes hard stop
 MAX_NEW_ARTISTS     = 200       # cap new discoveries
 MAX_TAGS            = 500       # limit tag snowball
@@ -56,11 +57,6 @@ LISTENER_DRIFT_PCT  = 0.10      # refresh trigger threshold
 TOP_ARTISTS_PAGES   = 1         # pages of top artists to seed from
 TOP_TAGS_PAGES      = 1         # pages of top tags to seed from
 ARTISTS_PER_TAG     = 10        # artists to pull per tag
-
-# Change detection controls
-#REFRESH_SAMPLE_SIZE = 200            # how many existing artists to re-check each run
-# We flag a change if listeners shifted by > this %, or tags list changed at all
-#LISTENER_DRIFT_PCT  = 0.05           # 5%
 
 # API rate
 REQUESTS_PER_SEC    = 4
@@ -92,7 +88,7 @@ def lfm_get(method: str, params: dict, retries: int = 4) -> Optional[dict]:
                 continue
             data = resp.json()
             if "error" in data:
-                if data["error"] == 6:      # artist/tag not found
+                if data["error"] == 6:
                     return None
                 log.warning(f"API error {data['error']}: {data.get('message')} on {method}")
                 return None
@@ -110,32 +106,23 @@ def throttle():
 # ── Step 1: Load existing artists from Snowflake ──────────────────────────────
 
 def load_existing_artists() -> dict:
-    """
-    Query artists_raw for the most recent record per artist.
-    Returns dict: { artist_name_lower -> {listeners, tags_json} }
-    Used to:
-      a) Skip already-known artists during new discovery
-      b) Provide baseline for change detection
-    """
     log.info("Loading existing artists from Snowflake...")
     try:
-        # Read the dataset — Dataiku handles the Snowflake query
         df = artists_raw_ds.get_dataframe(
-            columns=["artist_name", "listeners", "tags", "run_ts"]
+            columns=["ARTIST_NAME", "LISTENERS", "TAGS", "RUN_TS"]
         )
         if df.empty:
             log.info("  artists_raw is empty — this is a first run.")
             return {}
 
-        # Keep only the most recent row per artist
-        df["run_ts"] = pd.to_datetime(df["run_ts"], utc=True)
-        df = df.sort_values("run_ts").groupby("artist_name", as_index=False).last()
+        df["RUN_TS"] = pd.to_datetime(df["RUN_TS"], utc=True)
+        df = df.sort_values("RUN_TS").groupby("ARTIST_NAME", as_index=False).last()
 
         existing = {
-            row["artist_name"].lower(): {
-                "artist_name": row["artist_name"],
-                "listeners":   int(row["listeners"] or 0),
-                "tags":        row["tags"] or "[]",
+            row["ARTIST_NAME"].lower(): {
+                "artist_name": row["ARTIST_NAME"],
+                "listeners":   int(row["LISTENERS"] or 0),
+                "tags":        row["TAGS"] or "[]",
             }
             for _, row in df.iterrows()
         }
@@ -150,11 +137,6 @@ def load_existing_artists() -> dict:
 # ── Step 2: Change detection on existing artists ──────────────────────────────
 
 def refresh_existing_artists(existing: dict, writer) -> int:
-    """
-    Sample REFRESH_SAMPLE_SIZE artists from existing set.
-    Re-pull from API and write a new row if listeners drifted or tags changed.
-    Returns count of updated rows written.
-    """
     if not existing:
         return 0
 
@@ -173,15 +155,14 @@ def refresh_existing_artists(existing: dict, writer) -> int:
         if not data:
             continue
 
-        artist    = data.get("artist", {})
-        stats     = artist.get("stats", {})
+        artist        = data.get("artist", {})
+        stats         = artist.get("stats", {})
         new_listeners = int(stats.get("listeners", 0) or 0)
         raw_tags      = artist.get("tags", {}).get("tag", [])
         new_tags      = sorted([t["name"].strip().lower() for t in raw_tags if t.get("name")])
         old_tags      = sorted(json.loads(baseline["tags"]) if baseline["tags"] else [])
         old_listeners = baseline["listeners"]
 
-        # Detect change
         listener_drift = (
             abs(new_listeners - old_listeners) / max(old_listeners, 1)
         ) > LISTENER_DRIFT_PCT
@@ -193,16 +174,16 @@ def refresh_existing_artists(existing: dict, writer) -> int:
                 bio = bio[:bio.index("<a href")].strip()
 
             updates.append({
-                "run_id":        RUN_ID,
-                "run_ts":        RUN_TS,
-                "artist_name":   artist.get("name", baseline["artist_name"]).strip(),
-                "mbid":          artist.get("mbid", ""),
-                "listeners":     new_listeners,
-                "playcount":     int(stats.get("playcount", 0) or 0),
-                "tags":          json.dumps(new_tags),
-                "bio_summary":   bio[:2000],
-                "source":        "refresh",
-                "discovery_tag": "",
+                "RUN_ID":        RUN_ID,
+                "RUN_TS":        RUN_TS,
+                "ARTIST_NAME":   artist.get("name", baseline["artist_name"]).strip(),
+                "MBID":          artist.get("mbid", ""),
+                "LISTENERS":     new_listeners,
+                "PLAYCOUNT":     int(stats.get("playcount", 0) or 0),
+                "TAGS":          json.dumps(new_tags),
+                "BIO_SUMMARY":   bio[:2000],
+                "SOURCE":        "refresh",
+                "DISCOVERY_TAG": "",
             })
 
         if checked % 50 == 0:
@@ -216,7 +197,6 @@ def refresh_existing_artists(existing: dict, writer) -> int:
 # ── Step 3: Snowball — seed queues ────────────────────────────────────────────
 
 def seed_tags(tag_queue: deque, seen_tags: set):
-    """Seed tag queue from Last.fm global top tags — no hard-coded genres."""
     log.info("Seeding tag queue from global top tags...")
     for page in range(1, TOP_TAGS_PAGES + 1):
         data = lfm_get("tag.getTopTags", {"num_res": 50, "page": page})
@@ -232,11 +212,6 @@ def seed_tags(tag_queue: deque, seen_tags: set):
 
 
 def seed_artists_from_chart(artist_queue: deque, seen_artists: set) -> List[dict]:
-    """
-    Seed artist queue from global top artists chart.
-    Only queues artists not already in seen_artists (i.e. not in Snowflake).
-    Returns lightweight seed rows for any that are genuinely new.
-    """
     log.info("Seeding artist queue from chart...")
     seed_rows = []
     for page in range(1, TOP_ARTISTS_PAGES + 1):
@@ -252,16 +227,16 @@ def seed_artists_from_chart(artist_queue: deque, seen_artists: set) -> List[dict
             seen_artists.add(name.lower())
             artist_queue.append(name)
             seed_rows.append({
-                "run_id":        RUN_ID,
-                "run_ts":        RUN_TS,
-                "artist_name":   name,
-                "mbid":          a.get("mbid", ""),
-                "listeners":     listeners,
-                "playcount":     int(a.get("playcount", 0) or 0),
-                "tags":          json.dumps([]),
-                "bio_summary":   "",
-                "source":        "chart_seed",
-                "discovery_tag": "",
+                "RUN_ID":        RUN_ID,
+                "RUN_TS":        RUN_TS,
+                "ARTIST_NAME":   name,
+                "MBID":          a.get("mbid", ""),
+                "LISTENERS":     listeners,
+                "PLAYCOUNT":     int(a.get("playcount", 0) or 0),
+                "TAGS":          json.dumps([]),
+                "BIO_SUMMARY":   "",
+                "SOURCE":        "chart_seed",
+                "DISCOVERY_TAG": "",
             })
     log.info(f"  {len(seed_rows)} new chart artists queued.")
     return seed_rows
@@ -275,10 +250,6 @@ def enrich_artist(
     tag_queue: deque,
     seen_tags: set,
 ) -> Optional[dict]:
-    """
-    Full artist.getInfo. Feeds new tags into tag_queue (the snowball).
-    Returns row dict or None.
-    """
     data = lfm_get("artist.getInfo", {"artist": artist_name, "autocorrect": 1})
     throttle()
     if not data:
@@ -304,21 +275,20 @@ def enrich_artist(
         bio = bio[:bio.index("<a href")].strip()
 
     return {
-        "run_id":        RUN_ID,
-        "run_ts":        RUN_TS,
-        "artist_name":   artist.get("name", artist_name).strip(),
-        "mbid":          artist.get("mbid", ""),
-        "listeners":     listeners,
-        "playcount":     int(stats.get("playcount", 0) or 0),
-        "tags":          json.dumps(tag_names),
-        "bio_summary":   bio[:2000],
-        "source":        "snowball",
-        "discovery_tag": discovery_tag,
+        "RUN_ID":        RUN_ID,
+        "RUN_TS":        RUN_TS,
+        "ARTIST_NAME":   artist.get("name", artist_name).strip(),
+        "MBID":          artist.get("mbid", ""),
+        "LISTENERS":     listeners,
+        "PLAYCOUNT":     int(stats.get("playcount", 0) or 0),
+        "TAGS":          json.dumps(tag_names),
+        "BIO_SUMMARY":   bio[:2000],
+        "SOURCE":        "snowball",
+        "DISCOVERY_TAG": discovery_tag,
     }
 
 
 def expand_tag(tag_name: str, artist_queue: deque, seen_artists: set) -> int:
-    """Fetch top artists for a tag, add unseen ones to the artist queue."""
     data = lfm_get("tag.getTopArtists", {"tag": tag_name, "limit": ARTISTS_PER_TAG})
     throttle()
     if not data:
@@ -340,9 +310,9 @@ def flush_batch(batch: list, writer) -> int:
     if not batch:
         return 0
     df = pd.DataFrame(batch)
-    df["run_ts"]    = pd.to_datetime(df["run_ts"], utc=True)
-    df["listeners"] = df["listeners"].astype(int)
-    df["playcount"] = df["playcount"].astype(int)
+    df["RUN_TS"]    = pd.to_datetime(df["RUN_TS"], utc=True)
+    df["LISTENERS"] = df["LISTENERS"].astype(int)
+    df["PLAYCOUNT"] = df["PLAYCOUNT"].astype(int)
     writer.write_dataframe(df)
     return len(df)
 
@@ -362,7 +332,6 @@ def run():
     # ── 1. Load existing artists from Snowflake ───────────────────────────────
     existing = load_existing_artists()
 
-    # seen_artists starts populated from Snowflake — new discovery skips these
     seen_artists: set = set(existing.keys())
     seen_tags:    set = set()
     artist_queue: deque = deque()
@@ -398,12 +367,10 @@ def run():
 
         while (artist_queue or tag_queue) and new_artists_added < MAX_NEW_ARTISTS:
 
-            # Hard time check — stop and flush before we get killed
-            if time_remaining() < 5 * 60:      # less than 5 mins left
+            if time_remaining() < 5 * 60:
                 log.info(f"Approaching time limit — stopping discovery and flushing.")
                 break
 
-            # Enrich one artist
             if artist_queue:
                 artist_name = artist_queue.popleft()
                 row = enrich_artist(artist_name, "", tag_queue, seen_tags)
@@ -424,11 +391,9 @@ def run():
                         f"time left: {round(time_remaining()/60, 1)}m"
                     )
 
-            # Expand one tag
             if tag_queue:
                 expand_tag(tag_queue.popleft(), artist_queue, seen_artists)
 
-        # Flush remainder
         if current_batch:
             total_written += flush_batch(current_batch, writer)
 
@@ -444,16 +409,16 @@ def run():
 
     # ── 5. Write pipeline_runs row ────────────────────────────────────────────
     run_meta = pd.DataFrame([{
-        "run_id":             RUN_ID,
-        "run_ts":             RUN_TS,
-        "status":             "success" if total_written > 0 else "empty",
-        "rows_written":       total_written,
-        "new_artists_added":  new_artists_added,
-        "updates_written":    updates_written,
-        "artists_seen_total": len(seen_artists),
-        "tags_discovered":    len(seen_tags),
-        "elapsed_seconds":    elapsed_s,
-        "config": json.dumps({
+        "RUN_ID":             RUN_ID,
+        "RUN_TS":             RUN_TS,
+        "STATUS":             "success" if total_written > 0 else "empty",
+        "ROWS_WRITTEN":       total_written,
+        "NEW_ARTISTS_ADDED":  new_artists_added,
+        "UPDATES_WRITTEN":    updates_written,
+        "ARTISTS_SEEN_TOTAL": len(seen_artists),
+        "TAGS_DISCOVERED":    len(seen_tags),
+        "ELAPSED_SECONDS":    elapsed_s,
+        "CONFIG": json.dumps({
             "RUN_TIME_LIMIT_S":   RUN_TIME_LIMIT_S,
             "MAX_NEW_ARTISTS":    MAX_NEW_ARTISTS,
             "MAX_TAGS":           MAX_TAGS,

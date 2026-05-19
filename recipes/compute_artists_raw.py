@@ -37,9 +37,9 @@ RUN_TS              = datetime.now(timezone.utc)
 # overnight config
 RUN_TIME_LIMIT_S    = 32400   # 9 hours
 MAX_NEW_ARTISTS     = 500_000
-MAX_TAGS            = 10_000
-TOP_ARTISTS_PAGES   = 5
-TOP_TAGS_PAGES      = 5
+MAX_TAGS            = 50_000
+TOP_ARTISTS_PAGES   = 20
+TOP_TAGS_PAGES      = 20
 ARTISTS_PER_TAG     = 50
 REFRESH_SAMPLE_SIZE = 50
 

@@ -64,7 +64,18 @@
     "numPartitions": -1
   },
   "schema": {
-    "columns": [],
+    "columns": [
+      {"name":"RUN_ID","type":"string","comment":"","originalType":"VARCHAR","maxLength":16777216},
+      {"name":"RUN_TS","type":"date","comment":"","originalType":"TIMESTAMPTZ"},
+      {"name":"STATUS","type":"string","comment":"","originalType":"VARCHAR","maxLength":16777216},
+      {"name":"ROWS_WRITTEN","type":"bigint","comment":"","originalType":"NUMBER"},
+      {"name":"NEW_ARTISTS_ADDED","type":"bigint","comment":"","originalType":"NUMBER"},
+      {"name":"UPDATES_WRITTEN","type":"bigint","comment":"","originalType":"NUMBER"},
+      {"name":"ARTISTS_SEEN_TOTAL","type":"bigint","comment":"","originalType":"NUMBER"},
+      {"name":"TAGS_DISCOVERED","type":"bigint","comment":"","originalType":"NUMBER"},
+      {"name":"ELAPSED_SECONDS","type":"bigint","comment":"","originalType":"NUMBER"},
+      {"name":"CONFIG","type":"string","comment":"","originalType":"VARCHAR","maxLength":16777216}
+    ],
     "userModified": true
   },
   "typeSystemVersion": "V2",

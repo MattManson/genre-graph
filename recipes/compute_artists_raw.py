@@ -6,7 +6,8 @@ from datetime import datetime
 
 # Get API key from project variables
 project = dataiku.Project()
-api_key = project.get_variables()["local"]["LASTFM_API_KEY"]
+variables = project.get_variables()
+api_key = variables.get("local", {}).get("LASTFM_API_KEY") or variables.get("standard", {}).get("LASTFM_API_KEY")
 
 BASE_URL = "http://ws.audioscrobbler.com/2.0/"
 

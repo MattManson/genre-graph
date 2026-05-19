@@ -20,7 +20,12 @@
   "dkuProperties": [],
   "inputs": {
     "main": {
-      "items": []
+      "items": [
+        {
+          "ref": "artists_raw",
+          "deps": []
+        }
+      ]
     }
   },
   "outputs": {

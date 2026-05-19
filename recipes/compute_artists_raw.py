@@ -35,21 +35,32 @@ RUN_ID              = str(uuid.uuid4())
 RUN_TS              = datetime.now(timezone.utc)
 
 # Time budget — stop new discovery after this many seconds (leaves ~10 min buffer)
-RUN_TIME_LIMIT_S    = 100 * 60       # 100 minutes
+#RUN_TIME_LIMIT_S    = 100 * 60       # 100 minutes
 
 # New artist discovery controls
+#MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
+#MAX_TAGS            = 10_000         # max unique tags to track across the snowball
+#TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
+#TOP_TAGS_PAGES      = 5              # tag.getTopTags seed pages (50/page)
+#ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
+#MIN_LISTENERS       = 100            # drop artists below this threshold
+#MIN_TAG_COUNT       = 3              # drop tags used fewer than N times on an artist
+
+RUN_TIME_LIMIT_S    = 14400          # 4 hour hard stop
 MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
 MAX_TAGS            = 10_000         # max unique tags to track across the snowball
+MIN_LISTENERS       = 100            # drop artists below this threshold
+MIN_TAG_COUNT       = 3              # drop tags used fewer than N times on an artist
+REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
+LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
 TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
 TOP_TAGS_PAGES      = 5              # tag.getTopTags seed pages (50/page)
 ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
-MIN_LISTENERS       = 100            # drop artists below this threshold
-MIN_TAG_COUNT       = 3              # drop tags used fewer than N times on an artist
 
 # Change detection controls
-REFRESH_SAMPLE_SIZE = 200            # how many existing artists to re-check each run
+#REFRESH_SAMPLE_SIZE = 200            # how many existing artists to re-check each run
 # We flag a change if listeners shifted by > this %, or tags list changed at all
-LISTENER_DRIFT_PCT  = 0.05           # 5%
+#LISTENER_DRIFT_PCT  = 0.05           # 5%
 
 # API rate
 REQUESTS_PER_SEC    = 4

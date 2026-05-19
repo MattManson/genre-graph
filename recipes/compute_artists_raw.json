@@ -28,7 +28,11 @@
       "items": [
         {
           "ref": "artists_raw",
-          "appendMode": false
+          "appendMode": true
+        },
+        {
+          "ref": "pipeline_runs",
+          "appendMode": true
         }
       ]
     }

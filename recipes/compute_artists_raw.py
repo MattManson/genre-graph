@@ -142,6 +142,18 @@ def load_existing_artists() -> dict:
         log.warning(f"Could not load existing artists (first run?): {e}")
         return {}
 
+def load_exhausted_tags() -> set:
+    """Load tags already expanded in previous runs via DISCOVERY_TAG column."""
+    log.info("Loading previously expanded tags...")
+    try:
+        df = artists_raw_ds.get_dataframe(columns=["DISCOVERY_TAG"])
+        tags = set(df["DISCOVERY_TAG"].dropna().str.lower().unique())
+        tags.discard("")
+        log.info(f"  {len(tags):,} previously expanded tags found.")
+        return tags
+    except Exception as e:
+        log.warning(f"Could not load exhausted tags: {e}")
+        return set()
 
 # ── Step 2: Change detection on existing artists ──────────────────────────────
 
@@ -344,7 +356,7 @@ def run():
     existing = load_existing_artists()
 
     seen_artists: set = set(existing.keys())
-    seen_tags:    set = set()
+    seen_tags:    set = load_exhausted_tags() 
     artist_queue: deque = deque()
     tag_queue:    deque = deque()
 

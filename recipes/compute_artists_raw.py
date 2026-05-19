@@ -417,7 +417,7 @@ def run():
         "UPDATES_WRITTEN":    updates_written,
         "ARTISTS_SEEN_TOTAL": len(seen_artists),
         "TAGS_DISCOVERED":    len(seen_tags),
-        "ELAPSED_SECONDS":    elapsed_s,
+        "ELAPSED_SECONDS":    int(elapsed_s),
         "CONFIG": json.dumps({
             "RUN_TIME_LIMIT_S":   RUN_TIME_LIMIT_S,
             "MAX_NEW_ARTISTS":    MAX_NEW_ARTISTS,

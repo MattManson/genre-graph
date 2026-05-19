@@ -34,17 +34,26 @@ BASE_URL            = "https://ws.audioscrobbler.com/2.0/"
 RUN_ID              = str(uuid.uuid4())
 RUN_TS              = datetime.now(timezone.utc)
 
+# overnight config
+RUN_TIME_LIMIT_S    = 32400   # 9 hours
+MAX_NEW_ARTISTS     = 500_000
+MAX_TAGS            = 10_000
+TOP_ARTISTS_PAGES   = 5
+TOP_TAGS_PAGES      = 5
+ARTISTS_PER_TAG     = 50
+REFRESH_SAMPLE_SIZE = 50
+
 # ── Production config (uncomment to use) ──────────────────────────────────────
-RUN_TIME_LIMIT_S    = 7200           # 2 hour hard stop
-MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
-MAX_TAGS            = 10_000         # max unique tags to track across the snowball
+# RUN_TIME_LIMIT_S    = 7200           # 2 hour hard stop
+# MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
+# MAX_TAGS            = 10_000         # max unique tags to track across the snowball
 MIN_LISTENERS       = 100            # drop artists below this threshold
 MIN_TAG_COUNT       = 3              # drop tags used fewer than N times on an artist
-REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
+# REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
 LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
-TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
-TOP_TAGS_PAGES      = 5              # tag.getTopTags seed pages (50/page)
-ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
+# TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
+# TOP_TAGS_PAGES      = 5              # tag.getTopTags seed pages (50/page)
+# ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
 
 # ── Test config ───────────────────────────────────────────────────────────────
 # RUN_TIME_LIMIT_S    = 300       # 5 minutes hard stop
@@ -159,7 +168,8 @@ def refresh_existing_artists(existing: dict, writer) -> int:
         stats         = artist.get("stats", {})
         new_listeners = int(stats.get("listeners", 0) or 0)
         raw_tags      = artist.get("tags", {}).get("tag", [])
-        new_tags      = sorted([t["name"].strip().lower() for t in raw_tags if t.get("name")])
+        new_tags      = sorted([t["name"].strip().lower() for t in raw_tags 
+                        if t.get("name") and int(t.get("count", 0)) >= MIN_TAG_COUNT])
         old_tags      = sorted(json.loads(baseline["tags"]) if baseline["tags"] else [])
         old_listeners = baseline["listeners"]
 
@@ -263,7 +273,8 @@ def enrich_artist(
         return None
 
     raw_tags  = artist.get("tags", {}).get("tag", [])
-    tag_names = [t["name"].strip().lower() for t in raw_tags if t.get("name")]
+    tag_names = [t["name"].strip().lower() for t in raw_tags 
+             if t.get("name") and int(t.get("count", 0)) >= MIN_TAG_COUNT]
 
     for tag in tag_names:
         if tag and tag not in seen_tags and len(seen_tags) < MAX_TAGS:

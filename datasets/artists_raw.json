@@ -65,16 +65,16 @@
   },
   "schema": {
     "columns": [
-      {"name":"run_id","type":"string","comment":"","maxLength":1000},
-      {"name":"run_ts","type":"date","comment":"","maxLength":1000},
-      {"name":"artist_name","type":"string","comment":"","maxLength":1000},
-      {"name":"mbid","type":"string","comment":"","maxLength":1000},
-      {"name":"listeners","type":"bigint","comment":"","maxLength":1000},
-      {"name":"playcount","type":"bigint","comment":"","maxLength":1000},
-      {"name":"tags","type":"string","comment":"","maxLength":1000},
-      {"name":"bio_summary","type":"string","comment":"","maxLength":1000},
-      {"name":"source","type":"string","comment":"","maxLength":1000},
-      {"name":"discovery_tag","type":"string","comment":"","maxLength":1000}
+      {"name":"RUN_ID","type":"string","comment":"","maxLength":1000},
+      {"name":"RUN_TS","type":"date","comment":"","maxLength":1000},
+      {"name":"ARTIST_NAME","type":"string","comment":"","maxLength":1000},
+      {"name":"MBID","type":"string","comment":"","maxLength":1000},
+      {"name":"LISTENERS","type":"bigint","comment":"","maxLength":1000},
+      {"name":"PLAYCOUNT","type":"bigint","comment":"","maxLength":1000},
+      {"name":"TAGS","type":"string","comment":"","maxLength":1000},
+      {"name":"BIO_SUMMARY","type":"string","comment":"","maxLength":1000},
+      {"name":"SOURCE","type":"string","comment":"","maxLength":1000},
+      {"name":"DISCOVERY_TAG","type":"string","comment":"","maxLength":1000}
     ],
     "userModified": true
   },

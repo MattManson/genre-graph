@@ -429,11 +429,6 @@ def run():
                     f"time left: {round(time_remaining()/60, 1)}m"
                 )
 
-            elif tag_queue:
-                # Only expand tags when artist queue is empty — keeps the loop
-                # preferring enrichment over expansion to avoid unbounded queue growth
-                expand_tag(tag_queue.popleft(), artist_queue, seen_artists)
-
         if current_batch:
             total_written += flush_batch(current_batch, writer)
 

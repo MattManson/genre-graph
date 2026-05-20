@@ -55,7 +55,7 @@ MIN_TAG_COUNT       = 1              # drop tags used fewer than N times on an a
 REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
 LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
 TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
-TOP_TAGS_PAGES      = 5              # tag.getTopTags seed pages (50/page)
+TOP_TAGS_PAGES      = 20             # tag.getTopTags seed pages (50/page)
 ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
 
 # ── Test config ───────────────────────────────────────────────────────────────

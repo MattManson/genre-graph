@@ -29,7 +29,7 @@
         "minute": 0,
         "hour": 2,
         "timezone": "SERVER",
-        "lastUpdate": 1779308953156
+        "lastUpdate": 1779309106612
       }
     }
   ],
@@ -88,6 +88,29 @@
             "envMode": "USE_BUILTIN_MODE",
             "envName": "INTERNAL_document_extraction_v1"
           },
+          "proceedOnFailure": false
+        }
+      },
+      {
+        "id": "sql_mmanson01_fbS4LYqptygbdNV39pZxVA",
+        "type": "exec_sql",
+        "name": "Refresh dynamic tables",
+        "enabled": true,
+        "alwaysShowComment": false,
+        "runConditionType": "RUN_IF_STATUS_MATCH",
+        "runConditionStatuses": [
+          "SUCCESS",
+          "WARNING"
+        ],
+        "runConditionExpression": "",
+        "resetScenarioStatus": false,
+        "delayBetweenRetries": 10,
+        "maxRetriesOnFail": 0,
+        "params": {
+          "connection": "mmanson01",
+          "sql": "ALTER DYNAMIC TABLE MUSIC_GENRES.ANALYTICS.ARTISTS_CLEAN REFRESH;\nALTER DYNAMIC TABLE MUSIC_GENRES.ANALYTICS.TAG_CO_OCCURRENCE REFRESH;",
+          "overrideDefaultLimit": false,
+          "extraConf": [],
           "proceedOnFailure": false
         }
       }

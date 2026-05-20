@@ -22,7 +22,7 @@ import random
 import logging
 from datetime import datetime, timezone
 from collections import deque
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -35,37 +35,40 @@ RUN_ID              = str(uuid.uuid4())
 RUN_TS              = datetime.now(timezone.utc)
 
 # overnight config
-RUN_TIME_LIMIT_S    = 32400   # 9 hours
-MAX_NEW_ARTISTS     = 500_000
-MAX_TAGS            = 50_000
-TOP_ARTISTS_PAGES   = 20
-TOP_TAGS_PAGES      = 20
-ARTISTS_PER_TAG     = 50
-REFRESH_SAMPLE_SIZE = 50
+# RUN_TIME_LIMIT_S    = 32400   # 9 hours
+# MAX_NEW_ARTISTS     = 500_000
+# MAX_TAGS            = 50_000
+# TOP_ARTISTS_PAGES   = 20
+# TOP_TAGS_PAGES      = 20
+# ARTISTS_PER_TAG     = 50
+# REFRESH_SAMPLE_SIZE = 50
+# LISTENER_DRIFT_PCT  = 0.10
+# MIN_LISTENERS       = 100
+# MIN_TAG_COUNT       = 3
 
 # ── Production config (uncomment to use) ──────────────────────────────────────
 # RUN_TIME_LIMIT_S    = 7200           # 2 hour hard stop
 # MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
 # MAX_TAGS            = 10_000         # max unique tags to track across the snowball
-MIN_LISTENERS       = 100            # drop artists below this threshold
-MIN_TAG_COUNT       = 3              # drop tags used fewer than N times on an artist
+# MIN_LISTENERS       = 100            # drop artists below this threshold
+# MIN_TAG_COUNT       = 3              # drop tags used fewer than N times on an artist
 # REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
-LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
+# LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
 # TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
 # TOP_TAGS_PAGES      = 5              # tag.getTopTags seed pages (50/page)
 # ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
 
 # ── Test config ───────────────────────────────────────────────────────────────
-# RUN_TIME_LIMIT_S    = 300       # 5 minutes hard stop
-# MAX_NEW_ARTISTS     = 200       # cap new discoveries
-# MAX_TAGS            = 500       # limit tag snowball
-# MIN_TAG_COUNT       = 3         # drop tags used fewer than N times on an artist
-# MIN_LISTENERS       = 100       # minimum artist popularity filter
-# REFRESH_SAMPLE_SIZE = 10        # how many existing artists to refresh per run
-# LISTENER_DRIFT_PCT  = 0.10      # refresh trigger threshold
-# TOP_ARTISTS_PAGES   = 1         # pages of top artists to seed from
-# TOP_TAGS_PAGES      = 1         # pages of top tags to seed from
-# ARTISTS_PER_TAG     = 10        # artists to pull per tag
+RUN_TIME_LIMIT_S    = 300       # 5 minutes hard stop
+MAX_NEW_ARTISTS     = 200       # cap new discoveries
+MAX_TAGS            = 500       # limit tag snowball
+MIN_TAG_COUNT       = 3         # drop tags used fewer than N times on an artist
+MIN_LISTENERS       = 100       # minimum artist popularity filter
+REFRESH_SAMPLE_SIZE = 10        # how many existing artists to refresh per run
+LISTENER_DRIFT_PCT  = 0.10      # refresh trigger threshold
+TOP_ARTISTS_PAGES   = 1         # pages of top artists to seed from
+TOP_TAGS_PAGES      = 1         # pages of top tags to seed from
+ARTISTS_PER_TAG     = 10        # artists to pull per tag
 
 # API rate
 REQUESTS_PER_SEC    = 4
@@ -112,17 +115,22 @@ def throttle():
     time.sleep(SLEEP_BETWEEN_CALLS)
 
 
-# ── Step 1: Load existing artists from Snowflake ──────────────────────────────
+# ── Step 1: Load existing artists + exhausted tags from Snowflake ─────────────
 
-def load_existing_artists() -> dict:
+def load_existing_artists() -> Tuple[dict, set]:
     log.info("Loading existing artists from Snowflake...")
     try:
         df = artists_raw_ds.get_dataframe(
-            columns=["ARTIST_NAME", "LISTENERS", "TAGS", "RUN_TS"]
+            columns=["ARTIST_NAME", "LISTENERS", "TAGS", "RUN_TS", "DISCOVERY_TAG"]
         )
         if df.empty:
             log.info("  artists_raw is empty — this is a first run.")
-            return {}
+            return {}, set()
+
+        # exhausted tags — every value ever written to DISCOVERY_TAG
+        exhausted_tags = set(df["DISCOVERY_TAG"].dropna().str.lower().unique())
+        exhausted_tags.discard("")
+        log.info(f"  {len(exhausted_tags):,} previously expanded tags found.")
 
         df["RUN_TS"] = pd.to_datetime(df["RUN_TS"], utc=True)
         df = df.sort_values("RUN_TS").groupby("ARTIST_NAME", as_index=False).last()
@@ -136,24 +144,12 @@ def load_existing_artists() -> dict:
             for _, row in df.iterrows()
         }
         log.info(f"  Loaded {len(existing):,} existing artists.")
-        return existing
+        return existing, exhausted_tags
 
     except Exception as e:
         log.warning(f"Could not load existing artists (first run?): {e}")
-        return {}
+        return {}, set()
 
-def load_exhausted_tags() -> set:
-    """Load tags already expanded in previous runs via DISCOVERY_TAG column."""
-    log.info("Loading previously expanded tags...")
-    try:
-        df = artists_raw_ds.get_dataframe(columns=["DISCOVERY_TAG"])
-        tags = set(df["DISCOVERY_TAG"].dropna().str.lower().unique())
-        tags.discard("")
-        log.info(f"  {len(tags):,} previously expanded tags found.")
-        return tags
-    except Exception as e:
-        log.warning(f"Could not load exhausted tags: {e}")
-        return set()
 
 # ── Step 2: Change detection on existing artists ──────────────────────────────
 
@@ -180,7 +176,7 @@ def refresh_existing_artists(existing: dict, writer) -> int:
         stats         = artist.get("stats", {})
         new_listeners = int(stats.get("listeners", 0) or 0)
         raw_tags      = artist.get("tags", {}).get("tag", [])
-        new_tags      = sorted([t["name"].strip().lower() for t in raw_tags 
+        new_tags      = sorted([t["name"].strip().lower() for t in raw_tags
                         if t.get("name") and int(t.get("count", 0)) >= MIN_TAG_COUNT])
         old_tags      = sorted(json.loads(baseline["tags"]) if baseline["tags"] else [])
         old_listeners = baseline["listeners"]
@@ -247,7 +243,8 @@ def seed_artists_from_chart(artist_queue: deque, seen_artists: set) -> List[dict
             if not name or name.lower() in seen_artists or listeners < MIN_LISTENERS:
                 continue
             seen_artists.add(name.lower())
-            artist_queue.append(name)
+            # chart seed artists go into queue as (name, discovery_tag)
+            artist_queue.append((name, "chart_seed"))
             seed_rows.append({
                 "RUN_ID":        RUN_ID,
                 "RUN_TS":        RUN_TS,
@@ -258,7 +255,7 @@ def seed_artists_from_chart(artist_queue: deque, seen_artists: set) -> List[dict
                 "TAGS":          json.dumps([]),
                 "BIO_SUMMARY":   "",
                 "SOURCE":        "chart_seed",
-                "DISCOVERY_TAG": "",
+                "DISCOVERY_TAG": "chart_seed",
             })
     log.info(f"  {len(seed_rows)} new chart artists queued.")
     return seed_rows
@@ -285,8 +282,8 @@ def enrich_artist(
         return None
 
     raw_tags  = artist.get("tags", {}).get("tag", [])
-    tag_names = [t["name"].strip().lower() for t in raw_tags 
-             if t.get("name") and int(t.get("count", 0)) >= MIN_TAG_COUNT]
+    tag_names = [t["name"].strip().lower() for t in raw_tags
+                 if t.get("name") and int(t.get("count", 0)) >= MIN_TAG_COUNT]
 
     for tag in tag_names:
         if tag and tag not in seen_tags and len(seen_tags) < MAX_TAGS:
@@ -312,6 +309,7 @@ def enrich_artist(
 
 
 def expand_tag(tag_name: str, artist_queue: deque, seen_artists: set) -> int:
+    """Expand a tag into artists. Stores (artist_name, tag_name) tuples in the queue."""
     data = lfm_get("tag.getTopArtists", {"tag": tag_name, "limit": ARTISTS_PER_TAG})
     throttle()
     if not data:
@@ -322,7 +320,7 @@ def expand_tag(tag_name: str, artist_queue: deque, seen_artists: set) -> int:
         key  = name.lower()
         if name and key not in seen_artists:
             seen_artists.add(key)
-            artist_queue.append(name)
+            artist_queue.append((name, tag_name))  # tag_name becomes discovery_tag
             queued += 1
     return queued
 
@@ -352,12 +350,12 @@ def run():
     def time_remaining():
         return RUN_TIME_LIMIT_S - elapsed()
 
-    # ── 1. Load existing artists from Snowflake ───────────────────────────────
-    existing = load_existing_artists()
+    # ── 1. Load existing artists + exhausted tags from Snowflake ─────────────
+    existing, exhausted_tags = load_existing_artists()
 
     seen_artists: set = set(existing.keys())
-    seen_tags:    set = load_exhausted_tags() 
-    artist_queue: deque = deque()
+    seen_tags:    set = exhausted_tags        # pre-populate — skips already-expanded tags
+    artist_queue: deque = deque()             # stores (artist_name, discovery_tag) tuples
     tag_queue:    deque = deque()
 
     total_written     = 0
@@ -395,8 +393,8 @@ def run():
                 break
 
             if artist_queue:
-                artist_name = artist_queue.popleft()
-                row = enrich_artist(artist_name, "", tag_queue, seen_tags)
+                artist_name, discovery_tag = artist_queue.popleft()
+                row = enrich_artist(artist_name, discovery_tag, tag_queue, seen_tags)
                 if row:
                     current_batch.append(row)
                     new_artists_added += 1
@@ -428,7 +426,7 @@ def run():
         f"{updates_written:,} updates | "
         f"{len(seen_tags):,} tags | "
         f"{elapsed_s}s ({round(elapsed_s/3600, 2)}hrs)"
-    )
+      )
 
     # ── 5. Write pipeline_runs row ────────────────────────────────────────────
     run_meta = pd.DataFrame([{

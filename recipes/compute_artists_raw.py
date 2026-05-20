@@ -49,7 +49,7 @@ REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per 
 LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
 TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
 TOP_TAGS_PAGES      = 20             # tag.getTopTags seed pages (50/page)
-ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
+ARTISTS_PER_TAG     = 100            # tag.getTopArtists expansion width
 
 # ── overnight config (uncomment to use) ───────────────────────────────────────
 # RUN_TIME_LIMIT_S    = 32400
@@ -118,7 +118,12 @@ def lfm_get(method: str, params: dict, retries: int = 4) -> Optional[dict]:
 
 def throttle():
     time.sleep(SLEEP_BETWEEN_CALLS)
-
+    
+def safe_int(val, default=0):
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return default
 
 # ── Step 1: Load existing artists from Snowflake ──────────────────────────────
 # Returns the existing dict for use in the REFRESH phase only.
@@ -177,7 +182,7 @@ def refresh_existing_artists(existing: dict, writer) -> int:
         new_listeners = int(stats.get("listeners", 0) or 0)
         raw_tags      = artist.get("tags", {}).get("tag", [])
         new_tags      = sorted([t["name"].strip().lower() for t in raw_tags
-                        if t.get("name") and int(t.get("count", 0)) >= MIN_TAG_COUNT])
+                                 if t.get("name") and safe_int(t.get("count", 0)) >= MIN_TAG_COUNT])
         old_tags      = sorted(json.loads(baseline["tags"]) if baseline["tags"] else [])
         old_listeners = baseline["listeners"]
 
@@ -287,7 +292,7 @@ def enrich_artist(
 
     raw_tags  = artist.get("tags", {}).get("tag", [])
     tag_names = [t["name"].strip().lower() for t in raw_tags
-                 if t.get("name") and int(t.get("count", 0)) >= MIN_TAG_COUNT]
+                 if t.get("name") and safe_int(t.get("count", 0)) >= MIN_TAG_COUNT]
 
     for tag in tag_names:
         if tag and tag not in seen_tags and len(seen_tags) < MAX_TAGS:
@@ -394,8 +399,9 @@ def run():
             f"time remaining: {round(time_remaining()/60, 1)} mins"
         )
 
-        # ── 4. Snowball new artists until time/cap limit ───────────────────────
+        # ── 4. Snowball new artists until time/cap limit ───────────────────────────
         current_batch: list = []
+        last_flush_ts = time.time()  # ADD THIS
 
         while (artist_queue or tag_queue) and new_artists_added < MAX_NEW_ARTISTS:
 
@@ -415,17 +421,23 @@ def run():
                         written_this_run.add(artist_key)
                         new_artists_added += 1
 
-                if len(current_batch) >= WRITE_BATCH_SIZE:
-                    written = flush_batch(current_batch, writer)
-                    total_written += written
-                    current_batch = []
-                    log.info(
-                        f"  Batch flushed: {written:,} rows | "
-                        f"total: {total_written:,} | "
-                        f"new artists: {new_artists_added:,} | "
-                        f"tags: {len(seen_tags):,} | "
-                        f"time left: {round(time_remaining()/60, 1)}m"
-                    )
+            elif tag_queue:
+                expand_tag(tag_queue.popleft(), artist_queue, seen_artists)
+
+            # REPLACE the existing batch flush block with this:
+            time_since_flush = time.time() - last_flush_ts
+            if len(current_batch) >= WRITE_BATCH_SIZE or (current_batch and time_since_flush >= 600):
+                written = flush_batch(current_batch, writer)
+                total_written += written
+                current_batch = []
+                last_flush_ts = time.time()  # reset timer
+                log.info(
+                    f"  Batch flushed: {written:,} rows | "
+                    f"total: {total_written:,} | "
+                    f"new artists: {new_artists_added:,} | "
+                    f"tags: {len(seen_tags):,} | "
+                    f"time left: {round(time_remaining()/60, 1)}m"
+                )
 
             elif tag_queue:
                 # Only expand tags when artist queue is empty — keeps the loop

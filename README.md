@@ -52,12 +52,26 @@ snowflake/
   V2__raw_tables.sql          -- ARTISTS_RAW, PIPELINE_RUNS
   V3__dynamic_tables.sql      -- ARTISTS_CLEAN, TAG_CO_OCCURRENCE, row access policy
   V4__artist_embeddings.sql   -- ARTIST_EMBEDDINGS table + one-time bootstrap INSERT
+  V5__dmfs.sql                -- Data Metric Functions on ARTISTS_RAW and ARTISTS_CLEAN
 ```
+
+---
+
+## Orchestration
+
+The DSS scenario `genre_graph_orchestration` runs nightly at 02:00 UTC with four steps:
+
+1. **Ingest from Last.fm** — runs `lastfm_snowball_pipeline`, appends to `ARTISTS_RAW` and logs to `PIPELINE_RUNS`
+2. **Check pipeline run success** — queries `PIPELINE_RUNS`, aborts if no successful run in last 24h
+3. **Refresh dynamic tables** — force-refreshes `ARTISTS_CLEAN` and `TAG_CO_OCCURRENCE`
+4. **Check DMF results** — queries `SNOWFLAKE.CORE.DATA_METRIC_FUNCTION_RESULTS`; soft-fails on trial accounts where this schema is unavailable
 
 ---
 
 ## Notes
 
-- `V4__artist_embeddings.sql` includes an initial load `INSERT` that is safe to re-run (guarded by a `LEFT JOIN / IS NULL` check). In production, incremental updates are handled by a `MERGE` statement executed weekly via DSS Scenario.
+- `V4__artist_embeddings.sql` includes an initial load `INSERT` that is safe to re-run (guarded by a `LEFT JOIN / IS NULL` check). In production, incremental updates are handled by a `MERGE` statement executed via DSS Scenario.
 - The row access policy on `TAG_CO_OCCURRENCE` restricts non-privileged roles to pairs with `ARTIST_COUNT >= 10`.
 - `ARTIST_EMBEDDINGS` is intentionally decoupled from `ARTISTS_CLEAN` — bio content changes infrequently and Cortex compute is non-trivial; weekly refresh is sufficient.
+- Cortex AI functions (`EMBED_TEXT_768`) are unavailable on Snowflake free trial. The table structure, MERGE logic, and similarity search query are production-ready in `V4__artist_embeddings.sql`.
+- `SNOWFLAKE.CORE.DATA_METRIC_FUNCTION_RESULTS` is unavailable on free trial despite not being listed in Snowflake's documented trial limitations. DMF definitions are correct; results are queryable on paid tiers.

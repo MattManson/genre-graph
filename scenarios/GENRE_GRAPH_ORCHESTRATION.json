@@ -29,7 +29,7 @@
         "minute": 0,
         "hour": 2,
         "timezone": "SERVER",
-        "lastUpdate": 1779309106612
+        "lastUpdate": 1779309251292
       }
     }
   ],
@@ -111,6 +111,29 @@
           "sql": "ALTER DYNAMIC TABLE MUSIC_GENRES.ANALYTICS.ARTISTS_CLEAN REFRESH;\nALTER DYNAMIC TABLE MUSIC_GENRES.ANALYTICS.TAG_CO_OCCURRENCE REFRESH;",
           "overrideDefaultLimit": false,
           "extraConf": [],
+          "proceedOnFailure": false
+        }
+      },
+      {
+        "id": "custom_python_SPLt4/QyXZ4kBH8GGB8Zzg",
+        "type": "custom_python",
+        "name": "Check DMF results",
+        "enabled": true,
+        "alwaysShowComment": false,
+        "runConditionType": "RUN_IF_STATUS_MATCH",
+        "runConditionStatuses": [
+          "SUCCESS",
+          "WARNING"
+        ],
+        "runConditionExpression": "",
+        "resetScenarioStatus": false,
+        "delayBetweenRetries": 10,
+        "maxRetriesOnFail": 0,
+        "params": {
+          "script": "import dataiku\nfrom dataiku.core.sql import SQLExecutor2\n\nexecutor \u003d SQLExecutor2(connection\u003d\"mmanson01\")\n\nsql \u003d \"\"\"\n    SELECT \n        METRIC_NAME,\n        TABLE_NAME,\n        VALUE,\n        MEASUREMENT_TIME\n    FROM SNOWFLAKE.CORE.DATA_METRIC_FUNCTION_RESULTS\n    WHERE TABLE_NAME IN (\u0027ARTISTS_RAW\u0027, \u0027ARTISTS_CLEAN\u0027)\n    ORDER BY MEASUREMENT_TIME DESC\n    LIMIT 20\n\"\"\"\n\ndf \u003d executor.query_to_df(sql)\n\nif df.empty:\n    print(\"WARNING: No DMF results found — DMFs may not have fired yet\")\nelse:\n    df.columns \u003d [c.upper() for c in df.columns]\n    print(df.to_string(index\u003dFalse))\n    \n    # Hard fail: duplicates in ARTISTS_CLEAN post-dedup is a pipeline bug\n    dupes \u003d df[df[\u0027METRIC_NAME\u0027] \u003d\u003d \u0027DMF_DUPLICATE_ARTISTS\u0027]\n    if not dupes.empty and dupes.iloc[0][\u0027VALUE\u0027] \u003e 0:\n        raise Exception(f\"Duplicate artists detected in ARTISTS_CLEAN: {dupes.iloc[0][\u0027VALUE\u0027]} — dedup logic broken\")\n\nprint(\"DMF check complete\")",
+          "envSelection": {
+            "envMode": "INHERIT"
+          },
           "proceedOnFailure": false
         }
       }

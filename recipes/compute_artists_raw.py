@@ -67,7 +67,7 @@ RUN_TS              = datetime.now(timezone.utc)
 RUN_TIME_LIMIT_S    = 300
 MAX_NEW_ARTISTS     = 200
 MAX_TAGS            = 500
-MIN_TAG_COUNT       = 1
+# MIN_TAG_COUNT       = 1
 MIN_LISTENERS       = 100
 REFRESH_SAMPLE_SIZE = 10
 LISTENER_DRIFT_PCT  = 0.10
@@ -118,12 +118,6 @@ def lfm_get(method: str, params: dict, retries: int = 4) -> Optional[dict]:
 
 def throttle():
     time.sleep(SLEEP_BETWEEN_CALLS)
-    
-def safe_int(val, default=0):
-    try:
-        return int(val)
-    except (TypeError, ValueError):
-        return default
 
 # ── Step 1: Load existing artists from Snowflake ──────────────────────────────
 # Returns the existing dict for use in the REFRESH phase only.
@@ -181,8 +175,7 @@ def refresh_existing_artists(existing: dict, writer) -> int:
         stats         = artist.get("stats", {})
         new_listeners = int(stats.get("listeners", 0) or 0)
         raw_tags      = artist.get("tags", {}).get("tag", [])
-        new_tags      = sorted([t["name"].strip().lower() for t in raw_tags
-                                 if t.get("name") and safe_int(t.get("count", 0)) >= MIN_TAG_COUNT])
+        new_tags      = sorted([t["name"].strip().lower() for t in raw_tags if t.get("name")])
         old_tags      = sorted(json.loads(baseline["tags"]) if baseline["tags"] else [])
         old_listeners = baseline["listeners"]
 
@@ -291,10 +284,7 @@ def enrich_artist(
         return None
 
     raw_tags  = artist.get("tags", {}).get("tag", [])
-    log.info(f"DEBUG {artist_name}: raw_tags={raw_tags[:2]}")  # ADD THIS
-
-    tag_names = [t["name"].strip().lower() for t in raw_tags
-                 if t.get("name") and safe_int(t.get("count", 0)) >= MIN_TAG_COUNT]
+    tag_names = [t["name"].strip().lower() for t in raw_tags if t.get("name")]
 
     for tag in tag_names:
         if tag and tag not in seen_tags and len(seen_tags) < MAX_TAGS:

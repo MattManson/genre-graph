@@ -1,14 +1,7 @@
 {
   "type": "step_based",
   "name": "genre_graph_orchestration",
-  "active": false,
-  "creationTag": {
-    "versionNumber": 0,
-    "lastModifiedBy": {
-      "login": "matthew.r.manson@gmail.com"
-    },
-    "lastModifiedOn": 1779308185716
-  },
+  "active": true,
   "checklists": {
     "checklists": []
   },

@@ -3,12 +3,17 @@
 # Outputs: artists_raw, pipeline_runs
 #
 # Run behaviour:
-#   1. Load existing artists from Snowflake → skip for new discovery
+#   1. Load existing artists from Snowflake → used ONLY for refresh, not for blocking discovery
 #   2. Sample existing artists → re-pull and write update rows if changed
 #   3. Snowball new artists until MAX_NEW_ARTISTS or RUN_TIME_LIMIT_S reached
 #   4. Batch-write throughout, log to pipeline_runs on completion
 #
-# Designed to run repeatedly. Each run grows the dataset and checks for drift.
+# KEY FIX: seen_artists for the snowball starts EMPTY each run.
+# existing.keys() is only used by the refresh phase.
+# This allows the snowball to re-discover and re-enrich freely,
+# growing the dataset with each run rather than stalling after first pass.
+# Dedup is handled downstream in ARTISTS_CLEAN via ROW_NUMBER() on RUN_TS.
+#
 # Append-only: run_id + run_ts on every row = full audit trail.
 # ------------------------------------------------------------
 
@@ -34,8 +39,20 @@ BASE_URL            = "https://ws.audioscrobbler.com/2.0/"
 RUN_ID              = str(uuid.uuid4())
 RUN_TS              = datetime.now(timezone.utc)
 
-# overnight config
-# RUN_TIME_LIMIT_S    = 32400   # 9 hours
+# ── Production config ─────────────────────────────────────────────────────────
+# RUN_TIME_LIMIT_S    = 7200           # 2 hour hard stop
+# MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
+# MAX_TAGS            = 10_000         # max unique tags to track across the snowball
+# MIN_LISTENERS       = 100            # drop artists below this threshold
+# MIN_TAG_COUNT       = 1              # drop tags used fewer than N times on an artist
+# REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
+# LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
+# TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
+# TOP_TAGS_PAGES      = 20             # tag.getTopTags seed pages (50/page)
+# ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
+
+# ── overnight config (uncomment to use) ───────────────────────────────────────
+# RUN_TIME_LIMIT_S    = 32400
 # MAX_NEW_ARTISTS     = 500_000
 # MAX_TAGS            = 50_000
 # TOP_ARTISTS_PAGES   = 20
@@ -44,31 +61,19 @@ RUN_TS              = datetime.now(timezone.utc)
 # REFRESH_SAMPLE_SIZE = 50
 # LISTENER_DRIFT_PCT  = 0.10
 # MIN_LISTENERS       = 100
-# MIN_TAG_COUNT       = 3
+# MIN_TAG_COUNT       = 1
 
-# ── Production config (uncomment to use) ──────────────────────────────────────
-RUN_TIME_LIMIT_S    = 7200           # 2 hour hard stop
-MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
-MAX_TAGS            = 10_000         # max unique tags to track across the snowball
-MIN_LISTENERS       = 100            # drop artists below this threshold
-MIN_TAG_COUNT       = 1              # drop tags used fewer than N times on an artist
-REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
-LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
-TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
-TOP_TAGS_PAGES      = 20             # tag.getTopTags seed pages (50/page)
-ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
-
-# ── Test config ───────────────────────────────────────────────────────────────
-# RUN_TIME_LIMIT_S    = 300       # 5 minutes hard stop
-# MAX_NEW_ARTISTS     = 200       # cap new discoveries
-# MAX_TAGS            = 500       # limit tag snowball
-# MIN_TAG_COUNT       = 3         # drop tags used fewer than N times on an artist
-# MIN_LISTENERS       = 100       # minimum artist popularity filter
-# REFRESH_SAMPLE_SIZE = 10        # how many existing artists to refresh per run
-# LISTENER_DRIFT_PCT  = 0.10      # refresh trigger threshold
-# TOP_ARTISTS_PAGES   = 1         # pages of top artists to seed from
-# TOP_TAGS_PAGES      = 1         # pages of top tags to seed from
-# ARTISTS_PER_TAG     = 10        # artists to pull per tag
+# ── Test config (uncomment to use) ────────────────────────────────────────────
+RUN_TIME_LIMIT_S    = 300
+MAX_NEW_ARTISTS     = 200
+MAX_TAGS            = 500
+MIN_TAG_COUNT       = 1
+MIN_LISTENERS       = 100
+REFRESH_SAMPLE_SIZE = 10
+LISTENER_DRIFT_PCT  = 0.10
+TOP_ARTISTS_PAGES   = 1
+TOP_TAGS_PAGES      = 1
+ARTISTS_PER_TAG     = 10
 
 # API rate
 REQUESTS_PER_SEC    = 4
@@ -115,7 +120,9 @@ def throttle():
     time.sleep(SLEEP_BETWEEN_CALLS)
 
 
-# ── Step 1: Load existing artists + exhausted tags from Snowflake ─────────────
+# ── Step 1: Load existing artists from Snowflake ──────────────────────────────
+# Returns the existing dict for use in the REFRESH phase only.
+# Do NOT feed this into seen_artists for the snowball — that set starts empty.
 
 def load_existing_artists() -> dict:
     log.info("Loading existing artists from Snowflake...")
@@ -136,7 +143,7 @@ def load_existing_artists() -> dict:
             }
             for _, row in df.iterrows()
         }
-        log.info(f"  Loaded {len(existing):,} existing artists.")
+        log.info(f"  Loaded {len(existing):,} existing artists (for refresh only).")
         return existing
     except Exception as e:
         log.warning(f"Could not load existing artists (first run?): {e}")
@@ -146,6 +153,7 @@ def load_existing_artists() -> dict:
 # ── Step 2: Change detection on existing artists ──────────────────────────────
 
 def refresh_existing_artists(existing: dict, writer) -> int:
+    """Re-pull a random sample of known artists and write a new row if anything changed."""
     if not existing:
         return 0
 
@@ -222,6 +230,11 @@ def seed_tags(tag_queue: deque, seen_tags: set):
 
 
 def seed_artists_from_chart(artist_queue: deque, seen_artists: set) -> List[dict]:
+    """
+    Seed from chart. seen_artists here is the SNOWBALL set (starts empty),
+    so chart artists will be queued even if they're already in Snowflake.
+    This ensures they get re-enriched with current tags/bio on this run.
+    """
     log.info("Seeding artist queue from chart...")
     seed_rows = []
     for page in range(1, TOP_ARTISTS_PAGES + 1):
@@ -235,7 +248,6 @@ def seed_artists_from_chart(artist_queue: deque, seen_artists: set) -> List[dict
             if not name or name.lower() in seen_artists or listeners < MIN_LISTENERS:
                 continue
             seen_artists.add(name.lower())
-            # chart seed artists go into queue as (name, discovery_tag)
             artist_queue.append((name, "chart_seed"))
             seed_rows.append({
                 "RUN_ID":        RUN_ID,
@@ -249,7 +261,7 @@ def seed_artists_from_chart(artist_queue: deque, seen_artists: set) -> List[dict
                 "SOURCE":        "chart_seed",
                 "DISCOVERY_TAG": "chart_seed",
             })
-    log.info(f"  {len(seed_rows)} new chart artists queued.")
+    log.info(f"  {len(seed_rows)} chart artists queued.")
     return seed_rows
 
 
@@ -312,7 +324,7 @@ def expand_tag(tag_name: str, artist_queue: deque, seen_artists: set) -> int:
         key  = name.lower()
         if name and key not in seen_artists:
             seen_artists.add(key)
-            artist_queue.append((name, tag_name))  # tag_name becomes discovery_tag
+            artist_queue.append((name, tag_name))
             queued += 1
     return queued
 
@@ -342,12 +354,16 @@ def run():
     def time_remaining():
         return RUN_TIME_LIMIT_S - elapsed()
 
-    # ── 1. Load existing artists from Snowflake ───────────────────────────────
+    # ── 1. Load existing artists — for REFRESH only ───────────────────────────
     existing = load_existing_artists()
 
-    seen_artists:     set = set(existing.keys())  # skip already-known artists
+    # KEY FIX: seen_artists for the snowball starts EMPTY.
+    # existing.keys() is NOT fed in here — that was the bug causing the pipeline
+    # to stall after the first run. The snowball needs to freely re-discover
+    # artists; dedup is handled downstream in ARTISTS_CLEAN.
+    seen_artists:     set = set()                 # snowball: starts empty every run
     seen_tags:        set = set()                 # fresh each run, grows via enrichment
-    written_this_run: set = set()                 # prevent within-run dupes
+    written_this_run: set = set()                 # prevent within-run dupes only
     artist_queue:   deque = deque()
     tag_queue:      deque = deque()
 
@@ -359,6 +375,7 @@ def run():
     with artists_raw_ds.get_writer() as writer:
 
         # ── 2. Refresh sample of existing artists ─────────────────────────────
+        # existing dict is passed here — refresh uses it to detect drift
         updates_written = refresh_existing_artists(existing, writer)
         total_written  += updates_written
 
@@ -366,6 +383,7 @@ def run():
 
         # ── 3. Seed queues for new discovery ──────────────────────────────────
         seed_tags(tag_queue, seen_tags)
+        # seen_artists (empty) is passed — chart artists will ALL be queued this run
         seed_rows = seed_artists_from_chart(artist_queue, seen_artists)
         total_written += flush_batch(seed_rows, writer)
         new_artists_added += len(seed_rows)
@@ -409,7 +427,9 @@ def run():
                         f"time left: {round(time_remaining()/60, 1)}m"
                     )
 
-            if tag_queue:
+            elif tag_queue:
+                # Only expand tags when artist queue is empty — keeps the loop
+                # preferring enrichment over expansion to avoid unbounded queue growth
                 expand_tag(tag_queue.popleft(), artist_queue, seen_artists)
 
         if current_batch:

@@ -29,7 +29,7 @@
         "minute": 0,
         "hour": 2,
         "timezone": "SERVER",
-        "lastUpdate": 1779308847849
+        "lastUpdate": 1779308953156
       }
     }
   ],
@@ -64,6 +64,30 @@
           "stopAtFlowZoneBoundary": false,
           "refreshHiveMetastore": true,
           "handleWarningsAs": "WARNING",
+          "proceedOnFailure": false
+        }
+      },
+      {
+        "id": "custom_python_G2EqsRe+/LearDLESdq8aQ",
+        "type": "custom_python",
+        "name": "Check pipeline run success",
+        "enabled": true,
+        "alwaysShowComment": false,
+        "runConditionType": "RUN_IF_STATUS_MATCH",
+        "runConditionStatuses": [
+          "SUCCESS",
+          "WARNING"
+        ],
+        "runConditionExpression": "",
+        "resetScenarioStatus": false,
+        "delayBetweenRetries": 10,
+        "maxRetriesOnFail": 0,
+        "params": {
+          "script": "import dataiku\nimport pandas as pd\nfrom datetime import datetime, timezone, timedelta\n\nclient \u003d dataiku.api_client()\nproject_key \u003d dataiku.default_project_key()\nproject \u003d client.get_project(project_key)\n\n# Read PIPELINE_RUNS dataset\nruns_dataset \u003d dataiku.Dataset(\"PIPELINE_RUNS\")\ndf \u003d runs_dataset.get_dataframe()\n\nif df.empty:\n    raise Exception(\"PIPELINE_RUNS is empty — ingestion has never completed successfully\")\n\n# Normalise column names to uppercase\ndf.columns \u003d [c.upper() for c in df.columns]\n\n# Check for a successful run in the last 24h\ndf[\u0027RUN_TS\u0027] \u003d pd.to_datetime(df[\u0027RUN_TS\u0027], utc\u003dTrue)\ncutoff \u003d datetime.now(timezone.utc) - timedelta(hours\u003d24)\nrecent_success \u003d df[(df[\u0027STATUS\u0027] \u003d\u003d \u0027success\u0027) \u0026 (df[\u0027RUN_TS\u0027] \u003e\u003d cutoff)]\n\nif recent_success.empty:\n    raise Exception(f\"No successful pipeline run in the last 24h. Last run: {df[\u0027RUN_TS\u0027].max()}\")\n\nlatest \u003d recent_success.sort_values(\u0027RUN_TS\u0027).iloc[-1]\nprint(f\"Pipeline check passed — last successful run: {latest[\u0027RUN_TS\u0027]}\")\nprint(f\"Run ID: {latest.get(\u0027RUN_ID\u0027, \u0027n/a\u0027)}\")",
+          "envSelection": {
+            "envMode": "USE_BUILTIN_MODE",
+            "envName": "INTERNAL_document_extraction_v1"
+          },
           "proceedOnFailure": false
         }
       }

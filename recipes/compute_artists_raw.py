@@ -47,28 +47,28 @@ RUN_TS              = datetime.now(timezone.utc)
 # MIN_TAG_COUNT       = 3
 
 # ── Production config (uncomment to use) ──────────────────────────────────────
-# RUN_TIME_LIMIT_S    = 7200           # 2 hour hard stop
-# MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
-# MAX_TAGS            = 10_000         # max unique tags to track across the snowball
-# MIN_LISTENERS       = 100            # drop artists below this threshold
-# MIN_TAG_COUNT       = 3              # drop tags used fewer than N times on an artist
-# REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
-# LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
-# TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
-# TOP_TAGS_PAGES      = 5              # tag.getTopTags seed pages (50/page)
-# ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
+RUN_TIME_LIMIT_S    = 7200           # 2 hour hard stop
+MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
+MAX_TAGS            = 10_000         # max unique tags to track across the snowball
+MIN_LISTENERS       = 100            # drop artists below this threshold
+MIN_TAG_COUNT       = 3              # drop tags used fewer than N times on an artist
+REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
+LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
+TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
+TOP_TAGS_PAGES      = 5              # tag.getTopTags seed pages (50/page)
+ARTISTS_PER_TAG     = 50             # tag.getTopArtists expansion width
 
 # ── Test config ───────────────────────────────────────────────────────────────
-RUN_TIME_LIMIT_S    = 300       # 5 minutes hard stop
-MAX_NEW_ARTISTS     = 200       # cap new discoveries
-MAX_TAGS            = 500       # limit tag snowball
-MIN_TAG_COUNT       = 3         # drop tags used fewer than N times on an artist
-MIN_LISTENERS       = 100       # minimum artist popularity filter
-REFRESH_SAMPLE_SIZE = 10        # how many existing artists to refresh per run
-LISTENER_DRIFT_PCT  = 0.10      # refresh trigger threshold
-TOP_ARTISTS_PAGES   = 1         # pages of top artists to seed from
-TOP_TAGS_PAGES      = 1         # pages of top tags to seed from
-ARTISTS_PER_TAG     = 10        # artists to pull per tag
+# RUN_TIME_LIMIT_S    = 300       # 5 minutes hard stop
+# MAX_NEW_ARTISTS     = 200       # cap new discoveries
+# MAX_TAGS            = 500       # limit tag snowball
+# MIN_TAG_COUNT       = 3         # drop tags used fewer than N times on an artist
+# MIN_LISTENERS       = 100       # minimum artist popularity filter
+# REFRESH_SAMPLE_SIZE = 10        # how many existing artists to refresh per run
+# LISTENER_DRIFT_PCT  = 0.10      # refresh trigger threshold
+# TOP_ARTISTS_PAGES   = 1         # pages of top artists to seed from
+# TOP_TAGS_PAGES      = 1         # pages of top tags to seed from
+# ARTISTS_PER_TAG     = 10        # artists to pull per tag
 
 # API rate
 REQUESTS_PER_SEC    = 4
@@ -388,7 +388,7 @@ def run():
 
         while (artist_queue or tag_queue) and new_artists_added < MAX_NEW_ARTISTS:
 
-            if time_remaining() < min(300, RUN_TIME_LIMIT_S * 0.1):
+            if time_remaining() < 60:
                 log.info(f"Approaching time limit — stopping discovery and flushing.")
                 break
 

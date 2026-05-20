@@ -1,0 +1,166 @@
+{
+  "type": "Snowflake",
+  "managed": false,
+  "featureGroup": false,
+  "description": "",
+  "checklists": {
+    "checklists": []
+  },
+  "checks": [],
+  "customMeta": {
+    "kv": {}
+  },
+  "flowOptions": {
+    "virtualizable": false,
+    "rebuildBehavior": "NORMAL",
+    "crossProjectBuildBehavior": "DEFAULT",
+    "ignoreErrorStatusOnBuild": false
+  },
+  "readWriteOptions": {
+    "preserveOrder": false,
+    "writeBuckets": 1,
+    "forceSingleOutputFile": false,
+    "defaultReadOrdering": {
+      "enabled": false,
+      "rules": []
+    }
+  },
+  "partitioning": {
+    "ignoreNonMatchingFile": false,
+    "considerMissingRequestedPartitionsAsEmpty": false,
+    "dimensions": []
+  },
+  "creationTag": {
+    "versionNumber": 0,
+    "lastModifiedBy": {
+      "login": "matthew.r.manson@gmail.com"
+    },
+    "lastModifiedOn": 1779297887024
+  },
+  "tags": [],
+  "params": {
+    "connection": "mmanson01",
+    "notReadyIfEmpty": false,
+    "mode": "table",
+    "partitioningType": "custom",
+    "normalizeDoubles": false,
+    "catalog": "MUSIC_GENRES",
+    "table": "ARTISTS_CLEAN",
+    "schema": "ANALYTICS",
+    "tableCreationMode": "auto",
+    "writeInsertBatchSize": 10000,
+    "writeDescriptionsAsSQLComment": false,
+    "writeDatasetDescriptionAsSQLComment": "DISABLED",
+    "writeColumnDescriptionsAsSQLComment": "DISABLED",
+    "noDropOnSchemaMismatch": true,
+    "writeJDBCBadDataBehavior": "DISCARD_ROW",
+    "datetimenotzReadMode": "AS_IS",
+    "dateonlyReadMode": "AS_IS",
+    "variablesExpansionLoopConfig": {
+      "enabled": false,
+      "mode": "CREATE_VARIABLE_FOR_EACH_COLUMN",
+      "replacements": []
+    },
+    "sparkJdbcAccess": "NONE",
+    "numPartitions": -1
+  },
+  "schema": {
+    "columns": [
+      {"name":"ARTIST_NAME","type":"string","comment":"","originalType":"VARCHAR","maxLength":16777216},
+      {"name":"MBID","type":"string","comment":"","originalType":"VARCHAR","maxLength":16777216},
+      {"name":"LISTENERS","type":"bigint","comment":"","originalType":"NUMBER"},
+      {"name":"PLAYCOUNT","type":"bigint","comment":"","originalType":"NUMBER"},
+      {"name":"BIO_SUMMARY","type":"string","comment":"","originalType":"VARCHAR","maxLength":2000},
+      {"name":"SOURCE","type":"string","comment":"","originalType":"VARCHAR","maxLength":16777216},
+      {"name":"DISCOVERY_TAG","type":"string","comment":"","originalType":"VARCHAR","maxLength":16777216},
+      {"name":"RUN_ID","type":"string","comment":"","originalType":"VARCHAR","maxLength":16777216},
+      {"name":"RUN_TS","type":"date","comment":"","originalType":"TIMESTAMPTZ"},
+      {"name":"TAGS","type":"string","comment":"","originalType":"VARIANT","maxLength":16777216},
+      {"name":"TAG_COUNT","type":"bigint","comment":"","originalType":"NUMBER"},
+      {"name":"POPULARITY_TIER","type":"string","comment":"","originalType":"VARCHAR","maxLength":5}
+    ],
+    "userModified": true
+  },
+  "typeSystemVersion": "V2",
+  "dkuProperties": [],
+  "metrics": {
+    "probes": [
+      {
+        "type": "basic",
+        "enabled": true,
+        "computeOnBuildMode": "PARTITION",
+        "meta": {
+          "name": "Basic data",
+          "level": 0
+        },
+        "configuration": {}
+      },
+      {
+        "type": "records",
+        "enabled": true,
+        "computeOnBuildMode": "NO",
+        "meta": {
+          "name": "Record count",
+          "level": 0
+        },
+        "configuration": {}
+      }
+    ],
+    "engineConfig": {
+      "padRunsWithMetrics": false,
+      "hive": {
+        "active": true,
+        "extraConf": []
+      },
+      "basic": {},
+      "dss": {
+        "active": true,
+        "selection": {
+          "useMemTable": false,
+          "filter": {
+            "distinct": false,
+            "enabled": false
+          },
+          "partitionSelectionMethod": "ALL",
+          "latestPartitionsN": 1,
+          "ordering": {
+            "enabled": false,
+            "rules": []
+          },
+          "samplingMethod": "FULL",
+          "maxRecords": -1,
+          "targetRatio": 0.02,
+          "ascending": true,
+          "withinFirstN": -1,
+          "maxReadUncompressedBytes": -1
+        }
+      },
+      "sql": {
+        "active": true
+      },
+      "impala": {
+        "active": true
+      },
+      "spark": {
+        "active": true,
+        "extraConf": []
+      },
+      "python": {}
+    },
+    "displayedState": {
+      "columns": [],
+      "metrics": [
+        "basic:COUNT_COLUMNS",
+        "records:COUNT_RECORDS"
+      ]
+    }
+  },
+  "metricsChecks": {
+    "monitor": false,
+    "checks": [],
+    "displayedState": {
+      "checks": []
+    }
+  },
+  "customFields": {}
+}

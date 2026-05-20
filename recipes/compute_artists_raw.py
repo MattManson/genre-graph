@@ -416,7 +416,8 @@ def run():
 
             # REPLACE the existing batch flush block with this:
             time_since_flush = time.time() - last_flush_ts
-            if len(current_batch) >= WRITE_BATCH_SIZE or (current_batch and time_since_flush >= 600):
+            log.info(f"DEBUG flush check: batch={len(current_batch)}, time_since={round(time_since_flush)}s")
+            if len(current_batch) >= WRITE_BATCH_SIZE or (current_batch and time_since_flush >= 60):
                 written = flush_batch(current_batch, writer)
                 total_written += written
                 current_batch = []

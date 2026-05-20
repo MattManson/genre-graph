@@ -29,7 +29,7 @@
         "minute": 0,
         "hour": 2,
         "timezone": "SERVER",
-        "lastUpdate": 1779309880601
+        "lastUpdate": 1779311868402
       }
     }
   ],
@@ -130,7 +130,7 @@
         "delayBetweenRetries": 10,
         "maxRetriesOnFail": 0,
         "params": {
-          "script": "import dataiku\nfrom dataiku.core.sql import SQLExecutor2\n\nexecutor \u003d SQLExecutor2(connection\u003d\"mmanson01\")\n\nsql \u003d \"\"\"\n    SELECT \n        METRIC_NAME,\n        TABLE_NAME,\n        VALUE,\n        MEASUREMENT_TIME\n    FROM SNOWFLAKE.CORE.DATA_METRIC_FUNCTION_RESULTS\n    WHERE TABLE_NAME IN (\u0027ARTISTS_RAW\u0027, \u0027ARTISTS_CLEAN\u0027)\n    ORDER BY MEASUREMENT_TIME DESC\n    LIMIT 20\n\"\"\"\n\ndf \u003d executor.query_to_df(sql)\n\nif df.empty:\n    print(\"WARNING: No DMF results found — DMFs may not have fired yet\")\nelse:\n    df.columns \u003d [c.upper() for c in df.columns]\n    print(df.to_string(index\u003dFalse))\n    \n    # Hard fail: duplicates in ARTISTS_CLEAN post-dedup is a pipeline bug\n    dupes \u003d df[df[\u0027METRIC_NAME\u0027] \u003d\u003d \u0027DMF_DUPLICATE_ARTISTS\u0027]\n    if not dupes.empty and dupes.iloc[0][\u0027VALUE\u0027] \u003e 0:\n        raise Exception(f\"Duplicate artists detected in ARTISTS_CLEAN: {dupes.iloc[0][\u0027VALUE\u0027]} — dedup logic broken\")\n\nprint(\"DMF check complete\")",
+          "script": "from dataiku.core.sql import SQLExecutor2\n\nexecutor \u003d SQLExecutor2(connection\u003d\"mmanson01\")\n\ntry:\n    df \u003d executor.query_to_df(\"\"\"\n        SELECT \n            METRIC_NAME,\n            TABLE_NAME,\n            VALUE,\n            MEASUREMENT_TIME\n        FROM SNOWFLAKE.CORE.DATA_METRIC_FUNCTION_RESULTS\n        WHERE TABLE_NAME IN (\u0027ARTISTS_RAW\u0027, \u0027ARTISTS_CLEAN\u0027)\n        ORDER BY MEASUREMENT_TIME DESC\n        LIMIT 20\n    \"\"\")\n    \n    if df.empty:\n        print(\"WARNING: No DMF results found — DMFs may not have fired yet\")\n    else:\n        df.columns \u003d [c.upper() for c in df.columns]\n        print(df.to_string(index\u003dFalse))\n        \n        dupes \u003d df[df[\u0027METRIC_NAME\u0027] \u003d\u003d \u0027DMF_DUPLICATE_ARTISTS\u0027]\n        if not dupes.empty and dupes.iloc[0][\u0027VALUE\u0027] \u003e 0:\n            raise Exception(f\"Duplicate artists in ARTISTS_CLEAN: {dupes.iloc[0][\u0027VALUE\u0027]}\")\n\nexcept Exception as e:\n    if \u0027DATA_METRIC_FUNCTION_RESULTS\u0027 in str(e):\n        print(\"WARNING: SNOWFLAKE.CORE.DATA_METRIC_FUNCTION_RESULTS not available on this Snowflake tier — skipping DMF check\")\n        print(\"DMF results can be queried on paid Snowflake tiers after scheduler fires\")\n    else:\n        raise\n\nprint(\"DMF check step complete\")",
           "envSelection": {
             "envMode": "INHERIT"
           },

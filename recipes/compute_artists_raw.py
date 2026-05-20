@@ -40,15 +40,15 @@ RUN_ID              = str(uuid.uuid4())
 RUN_TS              = datetime.now(timezone.utc)
 
 # ── Production config ─────────────────────────────────────────────────────────
-# RUN_TIME_LIMIT_S    = 7200           # 2 hour hard stop
-# MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
-# MAX_TAGS            = 10_000         # max unique tags to track across the snowball
-# MIN_LISTENERS       = 100            # drop artists below this threshold
-# REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
-# LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
-# TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
-# TOP_TAGS_PAGES      = 20             # tag.getTopTags seed pages (50/page)
-# ARTISTS_PER_TAG     = 100            # tag.getTopArtists expansion width
+RUN_TIME_LIMIT_S    = 7200           # 2 hour hard stop
+MAX_NEW_ARTISTS     = 5_000          # max new artists to add per run
+MAX_TAGS            = 10_000         # max unique tags to track across the snowball
+MIN_LISTENERS       = 100            # drop artists below this threshold
+REFRESH_SAMPLE_SIZE = 50             # how many existing artists to refresh per run
+LISTENER_DRIFT_PCT  = 0.10           # refresh trigger threshold
+TOP_ARTISTS_PAGES   = 5              # chart.getTopArtists seed pages (50/page)
+TOP_TAGS_PAGES      = 20             # tag.getTopTags seed pages (50/page)
+ARTISTS_PER_TAG     = 100            # tag.getTopArtists expansion width
 
 # ── overnight config (uncomment to use) ───────────────────────────────────────
 # RUN_TIME_LIMIT_S    = 32400
@@ -63,15 +63,15 @@ RUN_TS              = datetime.now(timezone.utc)
 # MIN_TAG_COUNT       = 1
 
 # ── Test config (uncomment to use) ────────────────────────────────────────────
-RUN_TIME_LIMIT_S    = 300
-MAX_NEW_ARTISTS     = 200
-MAX_TAGS            = 500
-MIN_LISTENERS       = 100
-REFRESH_SAMPLE_SIZE = 10
-LISTENER_DRIFT_PCT  = 0.10
-TOP_ARTISTS_PAGES   = 1
-TOP_TAGS_PAGES      = 1
-ARTISTS_PER_TAG     = 10
+# RUN_TIME_LIMIT_S    = 300
+# MAX_NEW_ARTISTS     = 200
+# MAX_TAGS            = 500
+# MIN_LISTENERS       = 100
+# REFRESH_SAMPLE_SIZE = 10
+# LISTENER_DRIFT_PCT  = 0.10
+# TOP_ARTISTS_PAGES   = 1
+# TOP_TAGS_PAGES      = 1
+# ARTISTS_PER_TAG     = 10
 
 # API rate
 REQUESTS_PER_SEC    = 4

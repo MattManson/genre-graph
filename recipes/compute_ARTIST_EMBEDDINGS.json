@@ -1,0 +1,52 @@
+{
+  "type": "sql_script",
+  "neverRecomputeExistingPartitions": false,
+  "params": {
+    "allowMultipleConnections": false,
+    "usePsql": true,
+    "inferOutputDatasetsSchema": true,
+    "statementsParsingMode": "SPLIT",
+    "skipPrerunValidate": false
+  },
+  "customMeta": {
+    "kv": {}
+  },
+  "redispatchPartitioning": false,
+  "maxRunningActivities": 0,
+  "hashPropagationBehavior": "INHERIT",
+  "variables": {},
+  "dkuProperties": [],
+  "inputs": {
+    "main": {
+      "items": [
+        {
+          "ref": "ARTISTS_CLEAN",
+          "deps": []
+        }
+      ]
+    }
+  },
+  "outputs": {
+    "main": {
+      "items": [
+        {
+          "ref": "ARTIST_EMBEDDINGS",
+          "appendMode": false
+        }
+      ]
+    }
+  },
+  "labels": [],
+  "creationTag": {
+    "versionNumber": 0,
+    "lastModifiedBy": {
+      "login": "matthew.r.manson@gmail.com"
+    },
+    "lastModifiedOn": 1779297997796
+  },
+  "tags": [],
+  "customFields": {},
+  "checklists": {
+    "checklists": []
+  }
+}

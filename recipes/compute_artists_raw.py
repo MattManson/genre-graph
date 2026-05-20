@@ -181,7 +181,6 @@ def refresh_existing_artists(existing: dict, writer) -> int:
         stats         = artist.get("stats", {})
         new_listeners = int(stats.get("listeners", 0) or 0)
         raw_tags      = artist.get("tags", {}).get("tag", [])
-        log.info(f"DEBUG {artist_name}: raw_tags={raw_tags[:2]}")  # ADD THIS
         new_tags      = sorted([t["name"].strip().lower() for t in raw_tags
                                  if t.get("name") and safe_int(t.get("count", 0)) >= MIN_TAG_COUNT])
         old_tags      = sorted(json.loads(baseline["tags"]) if baseline["tags"] else [])
@@ -292,6 +291,8 @@ def enrich_artist(
         return None
 
     raw_tags  = artist.get("tags", {}).get("tag", [])
+    log.info(f"DEBUG {artist_name}: raw_tags={raw_tags[:2]}")  # ADD THIS
+
     tag_names = [t["name"].strip().lower() for t in raw_tags
                  if t.get("name") and safe_int(t.get("count", 0)) >= MIN_TAG_COUNT]
 

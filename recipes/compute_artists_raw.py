@@ -117,24 +117,17 @@ def throttle():
 
 # ── Step 1: Load existing artists + exhausted tags from Snowflake ─────────────
 
-def load_existing_artists() -> Tuple[dict, set]:
+def load_existing_artists() -> dict:
     log.info("Loading existing artists from Snowflake...")
     try:
         df = artists_raw_ds.get_dataframe(
-            columns=["ARTIST_NAME", "LISTENERS", "TAGS", "RUN_TS", "DISCOVERY_TAG"]
+            columns=["ARTIST_NAME", "LISTENERS", "TAGS", "RUN_TS"]
         )
         if df.empty:
             log.info("  artists_raw is empty — this is a first run.")
-            return {}, set()
-
-        # exhausted tags — every value ever written to DISCOVERY_TAG
-        exhausted_tags = set(df["DISCOVERY_TAG"].dropna().str.lower().unique())
-        exhausted_tags.discard("")
-        log.info(f"  {len(exhausted_tags):,} previously expanded tags found.")
-
+            return {}
         df["RUN_TS"] = pd.to_datetime(df["RUN_TS"], utc=True)
         df = df.sort_values("RUN_TS").groupby("ARTIST_NAME", as_index=False).last()
-
         existing = {
             row["ARTIST_NAME"].lower(): {
                 "artist_name": row["ARTIST_NAME"],
@@ -144,11 +137,10 @@ def load_existing_artists() -> Tuple[dict, set]:
             for _, row in df.iterrows()
         }
         log.info(f"  Loaded {len(existing):,} existing artists.")
-        return existing, exhausted_tags
-
+        return existing
     except Exception as e:
         log.warning(f"Could not load existing artists (first run?): {e}")
-        return {}, set()
+        return {}
 
 
 # ── Step 2: Change detection on existing artists ──────────────────────────────
@@ -350,13 +342,14 @@ def run():
     def time_remaining():
         return RUN_TIME_LIMIT_S - elapsed()
 
-    # ── 1. Load existing artists + exhausted tags from Snowflake ─────────────
-    existing, exhausted_tags = load_existing_artists()
+    # ── 1. Load existing artists from Snowflake ───────────────────────────────
+    existing = load_existing_artists()
 
-    seen_artists: set = set(existing.keys())
-    seen_tags:    set = exhausted_tags        # pre-populate — skips already-expanded tags
-    artist_queue: deque = deque()             # stores (artist_name, discovery_tag) tuples
-    tag_queue:    deque = deque()
+    seen_artists:     set = set(existing.keys())  # skip already-known artists
+    seen_tags:        set = set()                 # fresh each run, grows via enrichment
+    written_this_run: set = set()                 # prevent within-run dupes
+    artist_queue:   deque = deque()
+    tag_queue:      deque = deque()
 
     total_written     = 0
     new_artists_added = 0
@@ -389,16 +382,20 @@ def run():
         while (artist_queue or tag_queue) and new_artists_added < MAX_NEW_ARTISTS:
 
             if time_remaining() < 60:
-                log.info(f"Approaching time limit — stopping discovery and flushing.")
+                log.info("Approaching time limit — stopping discovery and flushing.")
                 break
 
             if artist_queue:
                 artist_name, discovery_tag = artist_queue.popleft()
+                artists_processed += 1
+
                 row = enrich_artist(artist_name, discovery_tag, tag_queue, seen_tags)
                 if row:
-                    current_batch.append(row)
-                    new_artists_added += 1
-                artists_processed += 1
+                    artist_key = row["ARTIST_NAME"].lower()
+                    if artist_key not in written_this_run:
+                        current_batch.append(row)
+                        written_this_run.add(artist_key)
+                        new_artists_added += 1
 
                 if len(current_batch) >= WRITE_BATCH_SIZE:
                     written = flush_batch(current_batch, writer)
@@ -426,7 +423,7 @@ def run():
         f"{updates_written:,} updates | "
         f"{len(seen_tags):,} tags | "
         f"{elapsed_s}s ({round(elapsed_s/3600, 2)}hrs)"
-      )
+    )
 
     # ── 5. Write pipeline_runs row ────────────────────────────────────────────
     run_meta = pd.DataFrame([{
@@ -436,7 +433,7 @@ def run():
         "ROWS_WRITTEN":       total_written,
         "NEW_ARTISTS_ADDED":  new_artists_added,
         "UPDATES_WRITTEN":    updates_written,
-        "ARTISTS_SEEN_TOTAL": len(seen_artists),
+        "ARTISTS_SEEN_TOTAL": len(seen_artists) + len(written_this_run),
         "TAGS_DISCOVERED":    len(seen_tags),
         "ELAPSED_SECONDS":    int(elapsed_s),
         "CONFIG": json.dumps({

@@ -388,7 +388,7 @@ def run():
 
         while (artist_queue or tag_queue) and new_artists_added < MAX_NEW_ARTISTS:
 
-            if time_remaining() < 5 * 60:
+            if time_remaining() < min(300, RUN_TIME_LIMIT_S * 0.1):
                 log.info(f"Approaching time limit — stopping discovery and flushing.")
                 break
 

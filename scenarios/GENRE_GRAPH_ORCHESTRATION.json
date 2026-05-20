@@ -11,7 +11,28 @@
     "suppressTriggersWhileRunning": true
   },
   "tags": [],
-  "triggers": [],
+  "triggers": [
+    {
+      "id": "pdkRdqK7",
+      "type": "temporal",
+      "name": "Time-based",
+      "delay": 5,
+      "active": true,
+      "params": {
+        "repeatFrequency": 1,
+        "frequency": "Daily",
+        "startingFrom": "2026-05-20",
+        "daysOfWeek": [
+          "Wednesday"
+        ],
+        "monthlyRunOn": "ON_THE_DAY",
+        "minute": 0,
+        "hour": 2,
+        "timezone": "SERVER",
+        "lastUpdate": 1779308440533
+      }
+    }
+  ],
   "reporters": [],
   "params": {
     "steps": []

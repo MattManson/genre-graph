@@ -31,14 +31,9 @@ jobs:
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
         run: |
           mkdir -p ~/.snowflake
-          cat > ~/.snowflake/config.toml << EOF
-          [connections.default]
-          account = "$SNOWFLAKE_ACCOUNT"
-          user = "$SNOWFLAKE_USER"
-          password = "$SNOWFLAKE_PASSWORD"
-          role = "ACCOUNTADMIN"
-          warehouse = "DSS_WH"
-          EOF
+          printf '[connections.default]\naccount = "%s"\nuser = "%s"\npassword = "%s"\nrole = "ACCOUNTADMIN"\nwarehouse = "DSS_WH"\n' \
+            "$SNOWFLAKE_ACCOUNT" "$SNOWFLAKE_USER" "$SNOWFLAKE_PASSWORD" \
+            > ~/.snowflake/config.toml
           chmod 0600 ~/.snowflake/config.toml
 
       - name: Deploy V1 — Infrastructure

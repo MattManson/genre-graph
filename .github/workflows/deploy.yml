@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - 'snowflake/**'
+  workflow_dispatch:
 
 jobs:
   deploy:

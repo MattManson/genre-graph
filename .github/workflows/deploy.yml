@@ -39,6 +39,7 @@ jobs:
           role = "ACCOUNTADMIN"
           warehouse = "DSS_WH"
           EOF
+          chmod 0600 ~/.snowflake/config.toml
 
       - name: Deploy V1 — Infrastructure
         run: snow sql -f snowflake/V1__infrastructure.sql

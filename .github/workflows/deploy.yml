@@ -24,54 +24,33 @@ jobs:
       - name: Install SnowflakeCLI
         run: pip install snowflake-cli-labs
 
-      - name: Deploy V1 — Infrastructure
+      - name: Configure SnowflakeCLI
         env:
           SNOWFLAKE_ACCOUNT:  ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER:     ${{ secrets.SNOWFLAKE_USER }}
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
         run: |
-          snow sql -f snowflake/V1__infrastructure.sql \
-            --account  "$SNOWFLAKE_ACCOUNT" \
-            --user     "$SNOWFLAKE_USER" \
-            --password "$SNOWFLAKE_PASSWORD" \
-            --role     ACCOUNTADMIN \
-            --warehouse DSS_WH
+          mkdir -p ~/.snowflake
+          cat > ~/.snowflake/config.toml << EOF
+          [connections.default]
+          account = "$SNOWFLAKE_ACCOUNT"
+          user = "$SNOWFLAKE_USER"
+          password = "$SNOWFLAKE_PASSWORD"
+          role = "ACCOUNTADMIN"
+          warehouse = "DSS_WH"
+          EOF
+
+      - name: Deploy V1 — Infrastructure
+        run: snow sql -f snowflake/V1__infrastructure.sql
 
       - name: Deploy V2 — Raw Tables
-        env:
-          SNOWFLAKE_ACCOUNT:  ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER:     ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-        run: |
-          snow sql -f snowflake/V2__raw_tables.sql \
-            --account  "$SNOWFLAKE_ACCOUNT" \
-            --user     "$SNOWFLAKE_USER" \
-            --password "$SNOWFLAKE_PASSWORD" \
-            --role     ACCOUNTADMIN \
-            --warehouse DSS_WH
+        run: snow sql -f snowflake/V2__raw_tables.sql
 
       - name: Deploy V3 — Dynamic Tables
-        env:
-          SNOWFLAKE_ACCOUNT:  ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER:     ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-        run: |
-          snow sql -f snowflake/V3__dynamic_tables.sql \
-            --account  "$SNOWFLAKE_ACCOUNT" \
-            --user     "$SNOWFLAKE_USER" \
-            --password "$SNOWFLAKE_PASSWORD" \
-            --role     ACCOUNTADMIN \
-            --warehouse DSS_WH
+        run: snow sql -f snowflake/V3__dynamic_tables.sql
 
       - name: Deploy V4 — Artist Embeddings
-        env:
-          SNOWFLAKE_ACCOUNT:  ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER:     ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-        run: |
-          snow sql -f snowflake/V4__artist_embeddings.sql \
-            --account  "$SNOWFLAKE_ACCOUNT" \
-            --user     "$SNOWFLAKE_USER" \
-            --password "$SNOWFLAKE_PASSWORD" \
-            --role     ACCOUNTADMIN \
-            --warehouse DSS_WH
+        run: snow sql -f snowflake/V4__artist_embeddings.sql
+
+      - name: Deploy V5 — DMFs
+        run: snow sql -f snowflake/V5__dmfs.sql

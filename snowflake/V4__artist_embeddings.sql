@@ -26,6 +26,10 @@ GRANT ALL ON TABLE MUSIC_GENRES.ANALYTICS.ARTIST_EMBEDDINGS TO ROLE DSS_ROLE;
 -- ── Initial load (run once after first ingestion completes) ───────────────────
 -- Embeds all artists with a non-empty bio not yet in the embeddings table.
 -- Safe to re-run: LEFT JOIN / IS NULL guard prevents duplicate inserts.
+
+-- Bootstrap INSERT requires Cortex (unavailable on trial accounts)
+-- Uncomment on paid tier:
+/*
 INSERT INTO MUSIC_GENRES.ANALYTICS.ARTIST_EMBEDDINGS (
     ARTIST_NAME,
     BIO_EMBEDDING,
@@ -45,3 +49,4 @@ LEFT JOIN MUSIC_GENRES.ANALYTICS.ARTIST_EMBEDDINGS ae
 WHERE ae.ARTIST_NAME IS NULL
   AND ac.BIO_SUMMARY IS NOT NULL
   AND TRIM(ac.BIO_SUMMARY) != '';
+*/
